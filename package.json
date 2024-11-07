@@ -1,0 +1,15 @@
+{
+  "name": "virtual-scroller",
+  "version": "0.0.1",
+  "description": "",
+  "main": "index.js",
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1",
+    "build": "google-closure-compiler --js=src/**/*.js --js=src/third_party/closure-library/closure/goog/**/*.js --entry_point=src/VirtualScroller.js --dependency_mode=STRICT --js_output_file=dist/VirtualScroller.min.js"
+  },
+  "author": "",
+  "license": "MIT",
+  "devDependencies": {
+    "google-closure-compiler": "^20240317.0.0"
+  }
+}
