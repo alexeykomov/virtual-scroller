@@ -5,7 +5,7 @@
   "main": "index.js",
   "scripts": {
     "test": "echo \"Error: no test specified\" && exit 1",
-    "build": "google-closure-compiler --js=src/third_party/closure-library/closure/goog/*.js --js=src/third_party/closure-library/closure/goog/**/*.js --js=src/virtual-scroller/**/*.js --js=src/virtual-scroller/*.js --entry_point=src/virtual-scroller/VirtualScroller.js --warning_level=VERBOSE --js_output_file=dist/VirtualScroller.min.js --define='COMPILED=true' --charset=utf-8 --compilation_level=ADVANCED_OPTIMIZATIONS --summary_detail_level=3 --language_out=ECMASCRIPT5 --warnings_allowlist_file=src/warning-allowlist.txt"
+    "build": "google-closure-compiler --js=src/third_party/closure-library/closure/goog/*.js --js=src/third_party/closure-library/closure/goog/**/*.js --js=src/virtual-scroller/**/*.js --js=src/virtual-scroller/*.js --entry_point=src/virtual-scroller/VirtualScroller.js --warning_level=VERBOSE --js_output_file=dist/VirtualScroller.min.js --define='COMPILED=true' --charset=utf-8 --compilation_level=ADVANCED_OPTIMIZATIONS --summary_detail_level=3 --language_out=ECMASCRIPT5"
   },
   "author": "",
   "license": "MIT",
