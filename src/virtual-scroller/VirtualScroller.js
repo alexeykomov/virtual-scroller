@@ -5,6 +5,7 @@ goog.require('goog.dom.classlist');
 goog.require('goog.ui.Component');
 goog.require('goog.events.EventHandler');
 goog.require('goog.events.EventType');
+goog.require('virtualscroller.Direction');
 
 /**
  * Virtual Scroller class for efficiently handling large lists of items.
@@ -22,7 +23,11 @@ virtualscroller.VirtualScroller = class extends goog.ui.Component {
     this.contentElem_ = null;
     this.probe_ = null;
     this.contentPosition_ = 0;
-    this.renderFn_ = () => {}
+    this.prevPosition_ = 0;
+    this.direction_ = virtualscroller.Direction.UP;
+    this.minIndex_ = 0;
+    this.maxIndex_ = 0;
+    this.renderFn_ = () => {};
   }
 
   createDom() {
@@ -114,8 +119,10 @@ virtualscroller.VirtualScroller = class extends goog.ui.Component {
       renderedCells.push(cellDom);
       index++;
     }
+    this.contentElem_.style.height = accumulatedHeight;
+    this.contentHeight = accumulatedHeight;
 
-    this.dom_.append(this.frameElem_, ...renderedCells);
+    this.dom_.append(this.contentElem_, ...renderedCells);
   }
 
   /**
@@ -163,6 +170,41 @@ virtualscroller.VirtualScroller = class extends goog.ui.Component {
   onContentScrolled_(e) {
     'use strict';
     this.contentPosition_ = this.getElement().scrollTop;
+    if (this.prevPosition_ < this.contentPosition_) {
+      this.direction_ =
+        this.prevPosition_ < this.contentPosition_
+          ? virtualscroller.Direction.UP
+          : virtualscroller.Direction.DOWN;
+    }
+    const speed = this.calculateSpeed_(this.contentPosition_, this.prevPosition_);
+    if (this.frameElem_.scrollTop < offset) {
+      this.placeCells_(virtualscroller.Direction.UP, speed);
+    }
+  }
+
+  /**
+   * Positions the cells based on the current scroll direction and updates the content.
+   * @param {virtualscroller.Direction} direction The current scroll direction (UP or DOWN).
+   * @param {number} speed The spee with which user scrolls
+   */
+  placeCells_(direction, speed) {
+    'use strict';
+
+    const frame = this.getElement(); // Frame element (main scroller)
+
+    const frameHeight = frame.clientHeight;
+    const offset = 100; // Buffer offset for pre-rendering
+    const start = this.contentPosition_ - offset;
+    const end = this.contentPosition_ + frameHeight + offset;
+
+    const cellDom = this.getCellDom();
+
+    this.dom_.appendChild(this.contentElem_, cellDom);
+    const cellHeight = this.fillCellWithContent(index, this.renderFn_, cellDom);
+
+    const contentHeight = this.contentHeight + cellHeight;
+    this.contentElem_.style.height = contentHeight;
+    this.contentHeight = contentHeight;
   }
 
   /**
