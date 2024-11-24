@@ -1,0 +1,64 @@
+# .drone.yml
+kind: pipeline
+type: docker
+name: closure-library-pipeline
+
+steps:
+  # Step 1: Install Dependencies
+  - name: install
+    image: node:20
+    environment:
+      NODE_ENV: development
+    commands:
+      - npm ci
+
+  # Step 2: Lint the JavaScript Code
+  - name: lint
+    image: node:20
+    commands:
+      - npm run lint
+
+  # Step 3: Run Unit Tests
+  - name: test
+    image: node:20
+    commands:
+      - npm test
+
+  # Step 4: Compile with Closure Compiler
+  - name: compile
+    image: openjdk:17
+    environment:
+      JAVA_HOME: /usr/local/openjdk-17
+    volumes:
+      - name: workspace
+        path: /workspace
+    commands:
+      - curl -LO https://repo1.maven.org/maven2/com/google/javascript/closure-compiler/v20230802/closure-compiler-v20230802.jar
+      - java -jar closure-compiler-v20230802.jar \
+        --js src/**/*.js \
+        --js_output_file build/bundle.js \
+        --compilation_level ADVANCED_OPTIMIZATIONS \
+        --externs externs.js \
+        --warning_level VERBOSE
+
+  # Step 5: Bundle and Minify Output
+  - name: bundle
+    image: node:20
+    commands:
+      - npm run bundle
+
+  # Step 6: Upload Artifacts (Optional)
+  - name: upload-artifacts
+    image: plugins/s3
+    settings:
+      bucket: my-bucket
+      region: us-east-1
+      source: build/bundle.js
+      target: js/bundle.js
+      access_key: ${AWS_ACCESS_KEY_ID}
+      secret_key: ${AWS_SECRET_ACCESS_KEY}
+
+# Define a workspace volume to persist files between steps
+volumes:
+  - name: workspace
+    temp: {}

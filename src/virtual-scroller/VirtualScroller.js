@@ -6,6 +6,9 @@ goog.require('goog.ui.Component');
 goog.require('goog.events.EventHandler');
 goog.require('goog.events.EventType');
 goog.require('virtualscroller.Direction');
+goog.require('virtualscroller.CellModel');
+goog.require('virtualscroller.structs.Deque');
+goog.require('virtualscroller.CellModel');
 
 /**
  * Virtual Scroller class for efficiently handling large lists of items.
@@ -28,6 +31,11 @@ virtualscroller.VirtualScroller = class extends goog.ui.Component {
     this.minIndex_ = 0;
     this.maxIndex_ = 0;
     this.renderFn_ = () => {};
+    this.reuseFn_ = () => {};
+    /**
+     * @type {!virtualscroller.structs.Deque<virtualscroller.CellModel>}
+     */
+    this.model = new virtualscroller.structs.Deque();
   }
 
   createDom() {
@@ -119,8 +127,8 @@ virtualscroller.VirtualScroller = class extends goog.ui.Component {
       renderedCells.push(cellDom);
       index++;
     }
-    this.contentElem_.style.height = accumulatedHeight;
-    this.contentHeight = accumulatedHeight;
+    this.contentHeight = Math.max(frameHeight, accumulatedHeight);
+    this.contentElem_.style.height = this.contentHeight;
 
     this.dom_.append(this.contentElem_, ...renderedCells);
   }
@@ -138,11 +146,13 @@ virtualscroller.VirtualScroller = class extends goog.ui.Component {
   /**
    * Fills the given cell element with content rendered into a fragment and sets its height based on measured content.
    * @param {number} index The index of the cell to fill.
-   * @param {(index: number, fragment: DocumentFragment) => void} renderFn A function that renders content into the given DocumentFragment.
+   * @param {(index: number, fragment: DocumentFragment) => void | null} renderFn A function that renders content into the given DocumentFragment.
+   * @param {(dom: Element) => void | null} reuseFn A function that uses content of previous cell to create current cell.
    * @param {Element} cellElem The DOM element representing the cell to be filled with content.
    * @return {number} client height of cell
    */
-  fillCellWithContent(index, renderFn, cellElem) {
+  fillCellWithContent(index, renderFn, reuseFn, cellElem) {
+    'use strict';
     const fragment = this.dom_.getDocument().createDocumentFragment();
     // Renders cell content into fragment
     renderFn(index, fragment);
@@ -183,6 +193,23 @@ virtualscroller.VirtualScroller = class extends goog.ui.Component {
   }
 
   /**
+   * @param {number} contentPosition
+   * @param {number} prevPosition
+   */
+  calculateSpeed_(contentPosition, prevPosition) {
+    return 1;
+  }
+
+  /**
+   * @param {number} prevUsedCellIndex
+   * @param {number} currentCellIndex
+   * @return {boolean} Whether cell from prevUsedCellIndex should br reused for cell at currentCellIndex
+   */
+  shouldReuse(prevUsedCellIndex, currentCellIndex) {
+    return false;
+  }
+
+  /**
    * Positions the cells based on the current scroll direction and updates the content.
    * @param {virtualscroller.Direction} direction The current scroll direction (UP or DOWN).
    * @param {number} speed The spee with which user scrolls
@@ -197,14 +224,42 @@ virtualscroller.VirtualScroller = class extends goog.ui.Component {
     const start = this.contentPosition_ - offset;
     const end = this.contentPosition_ + frameHeight + offset;
 
-    const cellDom = this.getCellDom();
+    let cellToRemove;
+    let prevUsedCellIndex;
+    let currentCellIndex;
+    if (direction === virtualscroller.Direction.UP) {
+      cellToRemove = this.dom_.getLastElementChild(this.contentElem_);
+      this.dom_.insertChildAt(this.contentElem_, cellToRemove, 0);
+      prevUsedCellIndex = this.model.peekBack().dataIndex;
+      currentCellIndex = this.model.peekFront().dataIndex + 1;
+      const modelOfCellToRemove = this.model.removeBack();
+      modelOfCellToRemove.dataIndex = currentCellIndex;
+      this.model.addFront(modelOfCellToRemove);
+    } else {
+      cellToRemove = this.dom_.getFirstElementChild(this.contentElem_);
+      this.dom_.appendChild(this.contentElem_, cellToRemove);
+      prevUsedCellIndex = this.model.peekFront().dataIndex;
+      currentCellIndex = this.model.peekBack().dataIndex - 1;
+      const modelOfCellToRemove = this.model.removeFront();
+      modelOfCellToRemove.dataIndex = currentCellIndex;
+      this.model.addBack(modelOfCellToRemove);
+    }
 
-    this.dom_.appendChild(this.contentElem_, cellDom);
-    const cellHeight = this.fillCellWithContent(index, this.renderFn_, cellDom);
+    let cellHeight = 0;
+    if (this.shouldReuse(prevUsedCellIndex, currentCellIndex)) {
+      cellHeight = this.fillCellWithContent(currentCellIndex, null, this.reuseFn_, cellToRemove);
+    } else {
+      cellHeight = this.fillCellWithContent(currentCellIndex, this.renderFn_, null, cellToRemove);
+    }
+    cellToRemove.style.height = cellHeight;
 
-    const contentHeight = this.contentHeight + cellHeight;
-    this.contentElem_.style.height = contentHeight;
-    this.contentHeight = contentHeight;
+    if (cellHeight + frameHeight > this.contentHeight) {
+      const contentHeight = this.contentHeight + cellHeight;
+      this.contentElem_.style.height = contentHeight;
+      this.contentHeight = contentHeight;
+      this.frameElem_.scrollTop +=
+        (direction === virtualscroller.Direction.UP ? 1 : -1) * cellHeight;
+    }
   }
 
   /**
