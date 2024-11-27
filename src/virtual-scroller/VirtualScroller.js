@@ -74,7 +74,7 @@ virtualscroller.VirtualScroller = class extends goog.ui.Component {
     elem.style.overflowY = 'auto';
     elem.tabIndex = 0;
 
-    contentElem.style.position = 'absolute';
+    contentElem.style.position = 'relative';
     contentElem.style.top = '0';
     contentElem.style.left = '0';
     contentElem.style.width = '100%';
@@ -141,6 +141,7 @@ virtualscroller.VirtualScroller = class extends goog.ui.Component {
   getCellDom() {
     const cell = this.dom_.createDom(goog.dom.TagName.DIV);
     goog.dom.classlist.add(cell, goog.getCssName('virtual-scroller-cell'));
+    cell.style.position = 'absolute';
     return cell;
   }
 
@@ -219,31 +220,44 @@ virtualscroller.VirtualScroller = class extends goog.ui.Component {
     let cellToRemove;
     let prevUsedCellIndex;
     let currentCellIndex;
+    let modelOfCellToRemove;
+    let cellHeight = 0;
     if (direction === virtualscroller.Direction.UP) {
       cellToRemove = this.dom_.getLastElementChild(this.contentElem_);
-      this.dom_.insertChildAt(this.contentElem_, cellToRemove, 0);
       prevUsedCellIndex = this.model_.peekBack().dataIndex;
-      currentCellIndex = this.model_.peekFront().dataIndex + 1;
-      const modelOfCellToRemove = this.model_.removeBack();
+      const peekFront = this.model_.peekFront();
+      currentCellIndex = peekFront.dataIndex - 1;
+      cellHeight = this.fillCellWithContentOptimized(
+        prevUsedCellIndex,
+        currentCellIndex,
+        cellToRemove
+      );
+      modelOfCellToRemove = this.model_.removeBack();
+      modelOfCellToRemove.top = peekFront.top - cellHeight;
+      modelOfCellToRemove.height = cellHeight;
       modelOfCellToRemove.dataIndex = currentCellIndex;
       this.model_.addFront(modelOfCellToRemove);
+      this.dom_.insertChildAt(this.contentElem_, cellToRemove, 0);
     } else {
       cellToRemove = this.dom_.getFirstElementChild(this.contentElem_);
-      this.dom_.appendChild(this.contentElem_, cellToRemove);
       prevUsedCellIndex = this.model_.peekFront().dataIndex;
-      currentCellIndex = this.model_.peekBack().dataIndex - 1;
-      const modelOfCellToRemove = this.model_.removeFront();
+      const peekBack = this.model_.peekBack();
+      currentCellIndex = peekBack.dataIndex + 1;
+      cellHeight = this.fillCellWithContentOptimized(
+        prevUsedCellIndex,
+        currentCellIndex,
+        cellToRemove
+      );
+      modelOfCellToRemove = this.model_.removeFront();
+      modelOfCellToRemove.top = peekBack.top + peekBack.height;
+      modelOfCellToRemove.height = cellHeight;
       modelOfCellToRemove.dataIndex = currentCellIndex;
       this.model_.addBack(modelOfCellToRemove);
+      this.dom_.appendChild(this.contentElem_, cellToRemove);
     }
 
-    let cellHeight = 0;
-    if (this.shouldReuseFn_(prevUsedCellIndex, currentCellIndex)) {
-      cellHeight = this.fillCellWithContent(currentCellIndex, null, this.reuseFn_, cellToRemove);
-    } else {
-      cellHeight = this.fillCellWithContent(currentCellIndex, this.renderFn_, null, cellToRemove);
-    }
-    cellToRemove.style.height = cellHeight;
+    modelOfCellToRemove.height = cellHeight;
+    cellToRemove.style.height = `${cellHeight}px`;
 
     if (cellHeight + frameHeight > this.contentHeight) {
       const contentHeight = this.contentHeight + cellHeight;
@@ -251,6 +265,20 @@ virtualscroller.VirtualScroller = class extends goog.ui.Component {
       this.contentHeight = contentHeight;
       this.frameElem_.scrollTop +=
         (direction === virtualscroller.Direction.UP ? 1 : -1) * cellHeight;
+    }
+  }
+
+  /***
+   * @param prevUsedCellIndex
+   * @param currentCellIndex
+   * @param cellToRemove
+   * @return {number}
+   */
+  fillCellWithContentOptimized(prevUsedCellIndex, currentCellIndex, cellToRemove) {
+    if (this.shouldReuseFn_(prevUsedCellIndex, currentCellIndex)) {
+      return this.fillCellWithContent(currentCellIndex, null, this.reuseFn_, cellToRemove);
+    } else {
+      return this.fillCellWithContent(currentCellIndex, this.renderFn_, null, cellToRemove);
     }
   }
 

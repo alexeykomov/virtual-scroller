@@ -38,14 +38,6 @@ virtualscroller.CellModel = class CellModel {
   }
 
   /**
-   * Updates the height of the cell.
-   * @param {number} newHeight - The new height for the cell.
-   */
-  setHeight(newHeight) {
-    this.height = newHeight;
-  }
-
-  /**
    * Retrieves the cell's metadata.
    * @return {T|null} The metadata associated with the cell.
    */

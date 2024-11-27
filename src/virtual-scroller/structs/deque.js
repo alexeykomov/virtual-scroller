@@ -2,7 +2,7 @@ goog.provide('virtualscroller.structs.Deque');
 
 /**
  * @fileoverview A generic double-ended queue (deque) implementation backed by a simple array.
- * Provides constant-time addition and removal operations at both ends.
+ * Provides constant-time addition and removal operations from end and O(n) addition and removal operations from start.
  *
  * Example usage:
  *
