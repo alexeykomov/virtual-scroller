@@ -28,14 +28,21 @@ virtualscroller.VirtualScroller = class extends goog.ui.Component {
     this.contentPosition_ = 0;
     this.prevPosition_ = 0;
     this.direction_ = virtualscroller.Direction.UP;
+    /** @type {number} Index of data item which will be at top position in content. */
+    this.initialIndex_ = 0;
     this.minIndex_ = 0;
     this.maxIndex_ = 0;
     this.renderFn_ = () => {};
+    /** @type {(prevUsedCellIndex: number, currentCellIndex: number) => boolean | null} A function that returns whether cell from prevUsedCellIndex should br reused for cell at currentCellIndex. */
     this.reuseFn_ = () => {};
+    /**
+     * @type {(prevUsedCellIndex: number, currentCellIndex: number) => boolean | null} A function that returns whether cell from prevUsedCellIndex should br reused for cell at currentCellIndex.
+     */
+    this.shouldReuseFn_ = () => {};
     /**
      * @type {!virtualscroller.structs.Deque<virtualscroller.CellModel>}
      */
-    this.model = new virtualscroller.structs.Deque();
+    this.model_ = new virtualscroller.structs.Deque();
   }
 
   createDom() {
@@ -88,9 +95,8 @@ virtualscroller.VirtualScroller = class extends goog.ui.Component {
     'use strict';
 
     const frame = this.getElement(); // Frame element (the main scroller)
-    const content = this.dom_.getElementByClass('virtual-scroller-content', frame); // Content element inside frame
+    const content = this.dom_.getFirstElementChild(frame); // Content element inside frame
 
-    // Measure the height of the frame and content
     const frameHeight = frame.clientHeight;
     let accumulatedHeight = 0;
 
@@ -107,21 +113,17 @@ virtualscroller.VirtualScroller = class extends goog.ui.Component {
     // Keep adding cells until the accumulated height exceeds frame height + offset
     while (accumulatedHeight < frameHeight + offset * 2) {
       // Get a new cell element (DOM node)
-      const cellDom = this.getCellDom();
+      const cellDom = /** @type {Element} */ this.getCellDom();
+      const cellModel = new virtualscroller.CellModel(this.initialIndex_ + index, 0, 0);
+      cellDom.id = cellModel.elementId;
 
-      // Measure the height of the cell
-      if (!cellDom) {
-        // Stop if getCellDom returns null or undefined
-        break;
-      }
-
+      this.model_.addBack(cellModel);
       this.dom_.appendChild(content, cellDom);
-      const cellHeight = this.fillCellWithContent(index, this.renderFn_, cellDom);
-
-      // If cell height is zero or invalid, skip it
-      if (cellHeight <= 0) {
-        continue;
-      }
+      const cellHeight = this.fillCellWithContent(index, this.renderFn_, null, cellDom);
+      cellModel.height = cellHeight;
+      cellModel.top = accumulatedHeight;
+      cellDom.style.height = `${cellModel.height}px`;
+      cellDom.style.top = `${cellModel.top}px`;
 
       accumulatedHeight += cellHeight;
       renderedCells.push(cellDom);
@@ -129,8 +131,6 @@ virtualscroller.VirtualScroller = class extends goog.ui.Component {
     }
     this.contentHeight = Math.max(frameHeight, accumulatedHeight);
     this.contentElem_.style.height = this.contentHeight;
-
-    this.dom_.append(this.contentElem_, ...renderedCells);
   }
 
   /**
@@ -139,8 +139,9 @@ virtualscroller.VirtualScroller = class extends goog.ui.Component {
    * @return {Element} A DOM element representing a cell.
    */
   getCellDom() {
-    // TODO: Implement this method
-    return null;
+    const cell = this.dom_.createDom(goog.dom.TagName.DIV);
+    goog.dom.classlist.add(cell, goog.getCssName('virtual-scroller-cell'));
+    return cell;
   }
 
   /**
@@ -201,15 +202,6 @@ virtualscroller.VirtualScroller = class extends goog.ui.Component {
   }
 
   /**
-   * @param {number} prevUsedCellIndex
-   * @param {number} currentCellIndex
-   * @return {boolean} Whether cell from prevUsedCellIndex should br reused for cell at currentCellIndex
-   */
-  shouldReuse(prevUsedCellIndex, currentCellIndex) {
-    return false;
-  }
-
-  /**
    * Positions the cells based on the current scroll direction and updates the content.
    * @param {virtualscroller.Direction} direction The current scroll direction (UP or DOWN).
    * @param {number} speed The spee with which user scrolls
@@ -230,23 +222,23 @@ virtualscroller.VirtualScroller = class extends goog.ui.Component {
     if (direction === virtualscroller.Direction.UP) {
       cellToRemove = this.dom_.getLastElementChild(this.contentElem_);
       this.dom_.insertChildAt(this.contentElem_, cellToRemove, 0);
-      prevUsedCellIndex = this.model.peekBack().dataIndex;
-      currentCellIndex = this.model.peekFront().dataIndex + 1;
-      const modelOfCellToRemove = this.model.removeBack();
+      prevUsedCellIndex = this.model_.peekBack().dataIndex;
+      currentCellIndex = this.model_.peekFront().dataIndex + 1;
+      const modelOfCellToRemove = this.model_.removeBack();
       modelOfCellToRemove.dataIndex = currentCellIndex;
-      this.model.addFront(modelOfCellToRemove);
+      this.model_.addFront(modelOfCellToRemove);
     } else {
       cellToRemove = this.dom_.getFirstElementChild(this.contentElem_);
       this.dom_.appendChild(this.contentElem_, cellToRemove);
-      prevUsedCellIndex = this.model.peekFront().dataIndex;
-      currentCellIndex = this.model.peekBack().dataIndex - 1;
-      const modelOfCellToRemove = this.model.removeFront();
+      prevUsedCellIndex = this.model_.peekFront().dataIndex;
+      currentCellIndex = this.model_.peekBack().dataIndex - 1;
+      const modelOfCellToRemove = this.model_.removeFront();
       modelOfCellToRemove.dataIndex = currentCellIndex;
-      this.model.addBack(modelOfCellToRemove);
+      this.model_.addBack(modelOfCellToRemove);
     }
 
     let cellHeight = 0;
-    if (this.shouldReuse(prevUsedCellIndex, currentCellIndex)) {
+    if (this.shouldReuseFn_(prevUsedCellIndex, currentCellIndex)) {
       cellHeight = this.fillCellWithContent(currentCellIndex, null, this.reuseFn_, cellToRemove);
     } else {
       cellHeight = this.fillCellWithContent(currentCellIndex, this.renderFn_, null, cellToRemove);

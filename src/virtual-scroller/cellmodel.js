@@ -18,14 +18,20 @@ virtualscroller.CellModel = class CellModel {
   /**
    * @param {number} dataIndex - The index of the data item associated with this cell.
    * @param {number} height - The height of the cell in pixels.
+   * @param {number} top - The top position of the cell in pixels.
    * @param {T=} metadata - Optional metadata associated with the cell.
    */
-  constructor(dataIndex, height, metadata = null) {
+  constructor(dataIndex, height, top, metadata = null) {
     /** @type {number} */
     this.dataIndex = dataIndex;
+    /** @type {string} */
+    this.elementId = `cell-element-${goog.getUid({})}`;
 
     /** @type {number} */
     this.height = height;
+
+    /** @type {number} Top position of cell. */
+    this.top = top;
 
     /** @type {T|null} */
     this.metadata = metadata;
