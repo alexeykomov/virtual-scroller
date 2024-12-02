@@ -33,15 +33,17 @@ virtualscroller.CellModel = class CellModel {
     /** @type {number} Top position of cell. */
     this.top = top;
 
+    /** @type {boolean} Whether this cell is sentinel. */
+    this.sentinel = false;
+
     /** @type {T|null} */
     this.metadata = metadata;
   }
 
   /**
-   * Retrieves the cell's metadata.
-   * @return {T|null} The metadata associated with the cell.
+   * @return {number}
    */
-  getMetadata() {
-    return this.metadata;
+  getBottom() {
+    return this.top + this.height;
   }
 };

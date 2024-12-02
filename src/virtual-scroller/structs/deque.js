@@ -91,3 +91,24 @@ virtualscroller.structs.Deque.prototype.peekFront = function () {
 virtualscroller.structs.Deque.prototype.peekBack = function () {
   return this.items_[this.items_.length - 1];
 };
+
+/**
+ * Iterates over each element in the deque, calling a provided callback function.
+ * @param {function(T, number): void | boolean} callback The function to execute for each element. If returns true, exits early
+ * @param {Object=} thisArg Optional. The value to use as `this` when executing `callback`.
+ * @param {boolean=} reverse Optional. Whether should go from back to front.
+ */
+virtualscroller.structs.Deque.prototype.forEach = function (callback, thisArg, reverse) {
+  if (reverse) {
+    for (let i = this.items_.length - 1; i >= 0; i--) {
+      if (callback.call(thisArg, this.items_[i], i)) {
+        break;
+      }
+    }
+  }
+  for (let i = 0; i < this.items_.length; i++) {
+    if (callback.call(thisArg, this.items_[i], i)) {
+      break;
+    }
+  }
+};

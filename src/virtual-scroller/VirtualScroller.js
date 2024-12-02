@@ -10,6 +10,8 @@ goog.require('virtualscroller.CellModel');
 goog.require('virtualscroller.structs.Deque');
 goog.require('virtualscroller.CellModel');
 
+virtualscroller.VirtualScroller.OFFSET = 100;
+
 /**
  * Virtual Scroller class for efficiently handling large lists of items.
  * @class
@@ -39,6 +41,10 @@ virtualscroller.VirtualScroller = class extends goog.ui.Component {
      * @type {(prevUsedCellIndex: number, currentCellIndex: number) => boolean | null} A function that returns whether cell from prevUsedCellIndex should br reused for cell at currentCellIndex.
      */
     this.shouldReuseFn_ = () => {};
+    /**
+     * @type {(dataIndex: number) => boolean} A function that returns whether we can render cell at given data index.
+     */
+    this.canRenderCelAtIndexFn_ = () => {};
     /**
      * @type {!virtualscroller.structs.Deque<virtualscroller.CellModel>}
      */
@@ -188,10 +194,58 @@ virtualscroller.VirtualScroller = class extends goog.ui.Component {
           ? virtualscroller.Direction.UP
           : virtualscroller.Direction.DOWN;
     }
+
     const speed = this.calculateSpeed_(this.contentPosition_, this.prevPosition_);
-    if (this.frameElem_.scrollTop < offset) {
-      this.placeCells_(virtualscroller.Direction.UP, speed);
+
+    if (this.direction_ === virtualscroller.Direction.UP) {
+      const sentinel = this.getClosestSentinel(false);
+      if (sentinel && sentinel.top + sentinel.height >= this.contentPosition_) {
+        this.placeCells_(this.direction_, speed);
+      }
     }
+    if (this.direction_ === virtualscroller.Direction.DOWN) {
+      const sentinel = this.getClosestSentinel(true);
+      if (
+        sentinel &&
+        sentinel.top + sentinel.height <= this.contentPosition_ + this.frameElem_.height
+      ) {
+        this.placeCells_(this.direction_, speed);
+      }
+    }
+  }
+
+  /**
+   * Finds the closest sentinel item in the deque.
+   * If moving from the top, finds the first sentinel item from the front.
+   * If moving from the bottom, finds the first sentinel item from the back.
+   *
+   * @param {boolean} top If true, searches from the front; if false, searches from the back.
+   * @return {virtualscroller.CellModel|undefined} The closest sentinel item, or undefined if none exists.
+   */
+  getClosestSentinel(top) {
+    let result = undefined;
+
+    if (top) {
+      this.model_.forEach((item) => {
+        if (item.sentinel) {
+          result = item;
+          return true;
+        }
+      }, this);
+    } else {
+      this.model_.forEach(
+        (item) => {
+          if (item.sentinel) {
+            result = item;
+            return true;
+          }
+        },
+        this,
+        true
+      );
+    }
+
+    return result;
   }
 
   /**
