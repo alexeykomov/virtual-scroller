@@ -219,13 +219,13 @@ virtualscroller.VirtualScroller = class extends goog.ui.Component {
    * If moving from the top, finds the first sentinel item from the front.
    * If moving from the bottom, finds the first sentinel item from the back.
    *
-   * @param {boolean} top If true, searches from the front; if false, searches from the back.
+   * @param {boolean} searchFromTop If true, searches from the front; if false, searches from the back.
    * @return {virtualscroller.CellModel|undefined} The closest sentinel item, or undefined if none exists.
    */
-  getClosestSentinel(top) {
+  getClosestSentinel(searchFromTop) {
     let result = undefined;
 
-    if (top) {
+    if (searchFromTop) {
       this.model_.forEach((item) => {
         if (item.sentinel) {
           result = item;
@@ -259,17 +259,13 @@ virtualscroller.VirtualScroller = class extends goog.ui.Component {
   /**
    * Positions the cells based on the current scroll direction and updates the content.
    * @param {virtualscroller.Direction} direction The current scroll direction (UP or DOWN).
-   * @param {number} speed The spee with which user scrolls
+   * @param {number} speed The speed with which user scrolls
+   * TODO: speed may affect how many cells are removed/created in batch
    */
   placeCells_(direction, speed) {
     'use strict';
-
     const frame = this.getElement(); // Frame element (main scroller)
-
     const frameHeight = frame.clientHeight;
-    const offset = 100; // Buffer offset for pre-rendering
-    const start = this.contentPosition_ - offset;
-    const end = this.contentPosition_ + frameHeight + offset;
 
     let cellToRemove;
     let prevUsedCellIndex;
@@ -319,6 +315,13 @@ virtualscroller.VirtualScroller = class extends goog.ui.Component {
       this.contentHeight = contentHeight;
       this.frameElem_.scrollTop +=
         (direction === virtualscroller.Direction.UP ? 1 : -1) * cellHeight;
+    }
+    if (direction === virtualscroller.Direction.UP) {
+      this.model_.forEach((cell) => {
+        cell.top += cellHeight;
+        this.getDomHelper().getDocument().getElementById(cell.elementId).style.top =
+          `${cell.top}px`;
+      });
     }
   }
 
