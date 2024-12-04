@@ -6,6 +6,7 @@ goog.require('goog.ui.Component');
 goog.require('goog.events.EventHandler');
 goog.require('goog.events.EventType');
 goog.require('virtualscroller.Direction');
+goog.require('virtualscroller.VirtualScrollerOptions');
 goog.require('virtualscroller.CellModel');
 goog.require('virtualscroller.structs.Deque');
 goog.require('virtualscroller.CellModel');
@@ -20,9 +21,27 @@ virtualscroller.VirtualScroller = class extends goog.ui.Component {
   /**
    * Initializes the Virtual Scroller.
    * @param {goog.dom.DomHelper=} opt_domHelper Optional DOM helper.
+   * @param {virtualscroller.VirtualScrollerOptions=} opt_options Optional configuration.
    */
-  constructor(opt_domHelper) {
+  constructor(opt_domHelper, opt_options) {
     super(opt_domHelper);
+    // Options.
+    /** @type {number} Index of data item which will be at top position in content. */
+    this.initialIndex_ = opt_options.initialIndex || 0;
+    this.minIndex_ = opt_options.minIndex || 0;
+    this.maxIndex_ = opt_options.maxIndex || 0;
+    this.renderFn_ = opt_options.renderFn || goog.abstractMethod;
+    /** @type {(prevUsedCellIndex: number, currentCellIndex: number) => boolean | null} A function that returns whether cell from prevUsedCellIndex should br reused for cell at currentCellIndex. */
+    this.reuseFn_ = opt_options.reuseFn;
+    /**
+     * @type {(prevUsedCellIndex: number, currentCellIndex: number) => boolean | null} A function that returns whether cell from prevUsedCellIndex should br reused for cell at currentCellIndex.
+     */
+    this.shouldReuseFn_ = opt_options.shouldReuseFn;
+    /**
+     * @type {(dataIndex: number) => boolean} A function that returns whether we can render cell at given data index.
+     */
+    this.canRenderCelAtIndexFn_ = opt_options.canRenderCellAtIndexFn || (() => true);
+
     /** @private @type {goog.events.EventHandler<!virtualscroller.VirtualScroller>} */
     this.frameElem_ = null;
     this.contentElem_ = null;
@@ -30,21 +49,6 @@ virtualscroller.VirtualScroller = class extends goog.ui.Component {
     this.contentPosition_ = 0;
     this.prevPosition_ = 0;
     this.direction_ = virtualscroller.Direction.UP;
-    /** @type {number} Index of data item which will be at top position in content. */
-    this.initialIndex_ = 0;
-    this.minIndex_ = 0;
-    this.maxIndex_ = 0;
-    this.renderFn_ = () => {};
-    /** @type {(prevUsedCellIndex: number, currentCellIndex: number) => boolean | null} A function that returns whether cell from prevUsedCellIndex should br reused for cell at currentCellIndex. */
-    this.reuseFn_ = () => {};
-    /**
-     * @type {(prevUsedCellIndex: number, currentCellIndex: number) => boolean | null} A function that returns whether cell from prevUsedCellIndex should br reused for cell at currentCellIndex.
-     */
-    this.shouldReuseFn_ = () => {};
-    /**
-     * @type {(dataIndex: number) => boolean} A function that returns whether we can render cell at given data index.
-     */
-    this.canRenderCelAtIndexFn_ = () => {};
     /**
      * @type {!virtualscroller.structs.Deque<virtualscroller.CellModel>}
      */
@@ -74,7 +78,7 @@ virtualscroller.VirtualScroller = class extends goog.ui.Component {
       this.contentElem_,
       'Content element must be present inside the frame element.'
     );
-
+    this.dom_.removeChildren(contentElem);
     goog.dom.classlist.add(elem, goog.getCssName('virtual-scroller-frame'));
     goog.dom.classlist.add(contentElem, goog.getCssName('virtual-scroller-content'));
     elem.style.overflowY = 'auto';
@@ -87,6 +91,8 @@ virtualscroller.VirtualScroller = class extends goog.ui.Component {
     contentElem.style.minHeight = '100%';
 
     const probe = this.dom_.createDom(goog.dom.TagName.DIV);
+    probe.style.transform = 'translate(-9999px, -9999px)';
+    probe.style.opacity = '0';
     this.probe_ = probe;
     this.dom_.append(contentElem, probe);
 
@@ -100,8 +106,8 @@ virtualscroller.VirtualScroller = class extends goog.ui.Component {
   renderCells() {
     'use strict';
 
-    const frame = this.getElement(); // Frame element (the main scroller)
-    const content = this.dom_.getFirstElementChild(frame); // Content element inside frame
+    const frame = this.getElement();
+    const content = this.contentElem_;
 
     const frameHeight = frame.clientHeight;
     let accumulatedHeight = 0;
@@ -109,10 +115,6 @@ virtualscroller.VirtualScroller = class extends goog.ui.Component {
     // Upper and lower offset (buffer area)
     const offset = 100; // You can adjust this value as needed
 
-    // Clear current content
-    this.dom_.removeChildren(content);
-
-    // Array to store the rendered cells
     const renderedCells = [];
 
     let index = 0;
@@ -125,7 +127,7 @@ virtualscroller.VirtualScroller = class extends goog.ui.Component {
 
       this.model_.addBack(cellModel);
       this.dom_.appendChild(content, cellDom);
-      const cellHeight = this.fillCellWithContent(index, this.renderFn_, null, cellDom);
+      const cellHeight = this.fillCellWithContent(index, this.renderFn_, cellDom);
       cellModel.height = cellHeight;
       cellModel.top = accumulatedHeight;
       cellDom.style.height = `${cellModel.height}px`;
@@ -155,11 +157,10 @@ virtualscroller.VirtualScroller = class extends goog.ui.Component {
    * Fills the given cell element with content rendered into a fragment and sets its height based on measured content.
    * @param {number} index The index of the cell to fill.
    * @param {(index: number, fragment: DocumentFragment) => void | null} renderFn A function that renders content into the given DocumentFragment.
-   * @param {(dom: Element) => void | null} reuseFn A function that uses content of previous cell to create current cell.
    * @param {Element} cellElem The DOM element representing the cell to be filled with content.
    * @return {number} client height of cell
    */
-  fillCellWithContent(index, renderFn, reuseFn, cellElem) {
+  fillCellWithContent(index, renderFn, cellElem) {
     'use strict';
     const fragment = this.dom_.getDocument().createDocumentFragment();
     // Renders cell content into fragment
@@ -313,15 +314,15 @@ virtualscroller.VirtualScroller = class extends goog.ui.Component {
       const contentHeight = this.contentHeight + cellHeight;
       this.contentElem_.style.height = contentHeight;
       this.contentHeight = contentHeight;
-      this.frameElem_.scrollTop +=
-        (direction === virtualscroller.Direction.UP ? 1 : -1) * cellHeight;
-    }
-    if (direction === virtualscroller.Direction.UP) {
-      this.model_.forEach((cell) => {
-        cell.top += cellHeight;
-        this.getDomHelper().getDocument().getElementById(cell.elementId).style.top =
-          `${cell.top}px`;
-      });
+
+      if (direction === virtualscroller.Direction.UP) {
+        this.frameElem_.scrollTop += cellHeight;
+        this.model_.forEach((cell) => {
+          cell.top += cellHeight;
+          this.getDomHelper().getDocument().getElementById(cell.elementId).style.top =
+            `${cell.top}px`;
+        });
+      }
     }
   }
 
@@ -332,11 +333,16 @@ virtualscroller.VirtualScroller = class extends goog.ui.Component {
    * @return {number}
    */
   fillCellWithContentOptimized(prevUsedCellIndex, currentCellIndex, cellToRemove) {
-    if (this.shouldReuseFn_(prevUsedCellIndex, currentCellIndex)) {
-      return this.fillCellWithContent(currentCellIndex, null, this.reuseFn_, cellToRemove);
+    let cellHeight = 0;
+    if (this.reuseFn_ && this.shouldReuseFn_(prevUsedCellIndex, currentCellIndex)) {
+      //TODO: check for potential layout blink when scrolling down and height of cell becomes larger.
+      cellToRemove = this.reuseFn_(currentCellIndex, cellToRemove);
+      cellHeight = cellToRemove.clientHeight;
     } else {
-      return this.fillCellWithContent(currentCellIndex, this.renderFn_, null, cellToRemove);
+      cellHeight = this.fillCellWithContent(currentCellIndex, this.renderFn_, cellToRemove);
     }
+
+    return cellHeight;
   }
 
   /**
