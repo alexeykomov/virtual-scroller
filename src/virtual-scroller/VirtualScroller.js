@@ -26,6 +26,23 @@ virtualscroller.VirtualScroller = class extends goog.ui.Component {
   constructor(opt_domHelper, opt_options) {
     super(opt_domHelper);
     // Options.
+    goog.asserts.assert(opt_options, 'Options must be provided.');
+    goog.asserts.assert(
+      typeof opt_options.renderFn === 'function',
+      'renderFn is required and must be a function.'
+    );
+    goog.asserts.assert(
+      typeof opt_options.initialIndex === 'number',
+      'initialIndex is required and must be a number.'
+    );
+    const hasMinMaxIndex =
+      typeof opt_options.minIndex === 'number' && typeof opt_options.maxIndex === 'number';
+    const hasCanRenderCellFn = typeof opt_options.canRenderCellAtIndexFn === 'function';
+    goog.asserts.assert(
+      hasMinMaxIndex || hasCanRenderCellFn,
+      'Either minIndex and maxIndex must be provided, or canRenderCellAtIndexFn must be defined.'
+    );
+
     /** @type {number} Index of data item which will be at top position in content. */
     this.initialIndex_ = opt_options.initialIndex || 0;
     this.minIndex_ = opt_options.minIndex || 0;
@@ -42,12 +59,17 @@ virtualscroller.VirtualScroller = class extends goog.ui.Component {
      */
     this.canRenderCelAtIndexFn_ = opt_options.canRenderCellAtIndexFn || (() => true);
 
-    /** @private @type {goog.events.EventHandler<!virtualscroller.VirtualScroller>} */
+    /** @private @type {Element} */
     this.frameElem_ = null;
+    /** @private @type {Element} */
     this.contentElem_ = null;
+    /** @private @type {Element} */
     this.probe_ = null;
+    /** @private @type {number} */
     this.contentPosition_ = 0;
+    /** @private @type {number} */
     this.prevPosition_ = 0;
+    /** @private @type {virtualscroller.Direction} */
     this.direction_ = virtualscroller.Direction.UP;
     /**
      * @type {!virtualscroller.structs.Deque<virtualscroller.CellModel>}
@@ -91,8 +113,10 @@ virtualscroller.VirtualScroller = class extends goog.ui.Component {
     contentElem.style.minHeight = '100%';
 
     const probe = this.dom_.createDom(goog.dom.TagName.DIV);
-    probe.style.transform = 'translate(-9999px, -9999px)';
+    probe.style.top = '-9999px';
+    probe.style.left = '-9999px';
     probe.style.opacity = '0';
+    probe.style.width = '100%';
     this.probe_ = probe;
     this.dom_.append(contentElem, probe);
 
@@ -119,7 +143,7 @@ virtualscroller.VirtualScroller = class extends goog.ui.Component {
 
     let index = 0;
     // Keep adding cells until the accumulated height exceeds frame height + offset
-    while (accumulatedHeight < frameHeight + offset * 2) {
+    while (accumulatedHeight < frameHeight) {
       // Get a new cell element (DOM node)
       const cellDom = /** @type {Element} */ this.getCellDom();
       const cellModel = new virtualscroller.CellModel(this.initialIndex_ + index, 0, 0);
@@ -150,6 +174,7 @@ virtualscroller.VirtualScroller = class extends goog.ui.Component {
     const cell = this.dom_.createDom(goog.dom.TagName.DIV);
     goog.dom.classlist.add(cell, goog.getCssName('virtual-scroller-cell'));
     cell.style.position = 'absolute';
+    cell.style.width = '100%';
     return cell;
   }
 
@@ -232,7 +257,7 @@ virtualscroller.VirtualScroller = class extends goog.ui.Component {
           result = item;
           return true;
         }
-      }, this);
+      });
     } else {
       this.model_.forEach(
         (item) => {

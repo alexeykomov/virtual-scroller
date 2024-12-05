@@ -20,7 +20,7 @@ virtualscroller.VirtualScrollerOptions.prototype.maxIndex;
 virtualscroller.VirtualScrollerOptions.prototype.renderFn;
 
 /**
- * @type {(function(number, number): boolean)|undefined}
+ * @type {(function(number, Element): Element)|undefined}
  */
 virtualscroller.VirtualScrollerOptions.prototype.reuseFn;
 
