@@ -12,6 +12,7 @@ goog.require('virtualscroller.structs.Deque');
 goog.require('virtualscroller.CellModel');
 
 virtualscroller.VirtualScroller.OFFSET = 100;
+virtualscroller.VirtualScroller.INITIAL_SENTINEL_NUM = 2;
 
 /**
  * Virtual Scroller class for efficiently handling large lists of items.
@@ -136,15 +137,9 @@ virtualscroller.VirtualScroller = class extends goog.ui.Component {
     const frameHeight = frame.clientHeight;
     let accumulatedHeight = 0;
 
-    // Upper and lower offset (buffer area)
-    const offset = 100; // You can adjust this value as needed
-
-    const renderedCells = [];
-
     let index = 0;
-    // Keep adding cells until the accumulated height exceeds frame height + offset
+
     while (accumulatedHeight < frameHeight) {
-      // Get a new cell element (DOM node)
       const cellDom = /** @type {Element} */ this.getCellDom();
       const cellModel = new virtualscroller.CellModel(this.initialIndex_ + index, 0, 0);
       cellDom.id = cellModel.elementId;
@@ -158,11 +153,68 @@ virtualscroller.VirtualScroller = class extends goog.ui.Component {
       cellDom.style.top = `${cellModel.top}px`;
 
       accumulatedHeight += cellHeight;
-      renderedCells.push(cellDom);
       index++;
     }
+    accumulatedHeight += this.addBufferCells(
+      virtualscroller.Direction.UP,
+      virtualscroller.VirtualScroller.INITIAL_SENTINEL_NUM,
+      this.model_.peekFront().dataIndex - 1,
+      frame,
+      content
+    );
+    accumulatedHeight += this.addBufferCells(
+      virtualscroller.Direction.DOWN,
+      virtualscroller.VirtualScroller.INITIAL_SENTINEL_NUM,
+      this.model_.peekBack().dataIndex + 1,
+      frame,
+      content
+    );
     this.contentHeight = Math.max(frameHeight, accumulatedHeight);
     this.contentElem_.style.height = this.contentHeight;
+    const closestNonSentinel = this.getClosestSentinel(true, false);
+    this.getElement().scrollTop = closestNonSentinel ? closestNonSentinel.top : 0;
+  }
+
+  /**
+   * Adds buffer cells either above or below the current frame.
+   * @param {virtualscroller.Direction} direction Direction of cell addition: -1 for above, 1 for below.
+   * @param {number} count Number of cells to add.
+   * @param {number} startIndex Starting index for cell addition.
+   * @param {Element} frame The frame element.
+   * @param {Element} content The content element.
+   * @return {number} Height of cells
+   */
+  addBufferCells(direction, count, startIndex, frame, content) {
+    let height = 0;
+    for (let i = 0; i < count; i++) {
+      const index = startIndex + (direction === virtualscroller.Direction.UP ? -1 : 1) * i;
+      const cellDom = /** @type {Element} */ this.getCellDom();
+      const cellHeight = this.fillCellWithContent(index, this.renderFn_, cellDom);
+      const cellModel = new virtualscroller.CellModel(index, cellHeight, 0);
+      cellModel.sentinel = true;
+      cellModel.height = cellHeight;
+      height += cellHeight;
+      cellDom.id = cellModel.elementId;
+
+      if (direction === virtualscroller.Direction.UP) {
+        const prevFirstCellModel = this.model_.peekFront();
+        const prevFirstCellDom = this.dom_
+          .getDocument()
+          .getElementById(prevFirstCellModel.elementId);
+        this.dom_.insertSiblingBefore(prevFirstCellDom, cellDom);
+        this.model_.addFront(cellModel);
+        cellModel.top = prevFirstCellModel.top - cellHeight;
+      } else {
+        const prevFirstCellModel = this.model_.peekBack();
+        this.model_.addBack(cellModel);
+        this.dom_.appendChild(content, cellDom);
+        cellModel.top = prevFirstCellModel.top + prevFirstCellModel.height;
+      }
+
+      cellDom.style.height = `${cellModel.height}px`;
+      cellDom.style.top = `${cellModel.top}px`;
+    }
+    return height;
   }
 
   /**
@@ -241,19 +293,22 @@ virtualscroller.VirtualScroller = class extends goog.ui.Component {
   }
 
   /**
-   * Finds the closest sentinel item in the deque.
-   * If moving from the top, finds the first sentinel item from the front.
-   * If moving from the bottom, finds the first sentinel item from the back.
+   * Finds the closest item in the deque that matches the specified condition.
+   * If `searchFromTop` is true, searches from the front; otherwise, searches from the back.
+   * Can search for either sentinel or non-sentinel nodes based on the `findSentinel` parameter.
    *
    * @param {boolean} searchFromTop If true, searches from the front; if false, searches from the back.
-   * @return {virtualscroller.CellModel|undefined} The closest sentinel item, or undefined if none exists.
+   * @param {boolean=} findSentinel If true (default), searches for sentinel nodes; if false, searches for non-sentinel nodes.
+   * @return {virtualscroller.CellModel|undefined} The closest matching item, or undefined if none exists.
    */
-  getClosestSentinel(searchFromTop) {
+  getClosestSentinel(searchFromTop, findSentinel = true) {
     let result = undefined;
+
+    const condition = (item) => (findSentinel ? item.sentinel : !item.sentinel);
 
     if (searchFromTop) {
       this.model_.forEach((item) => {
-        if (item.sentinel) {
+        if (condition(item)) {
           result = item;
           return true;
         }
@@ -261,7 +316,7 @@ virtualscroller.VirtualScroller = class extends goog.ui.Component {
     } else {
       this.model_.forEach(
         (item) => {
-          if (item.sentinel) {
+          if (condition(item)) {
             result = item;
             return true;
           }
