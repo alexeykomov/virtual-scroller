@@ -1,13 +1,14 @@
+/**
+ * @fileoverview A record type defining the configuration options for the VirtualScroller.
+ */
 goog.provide('virtualscroller.VirtualScrollerOptions');
 
 /**
- * @fileoverview A record type defining the configuration options for the VirtualScroller.
- *
- * @record
+ * @constructor
  */
 virtualscroller.VirtualScrollerOptions = function() {};
 
-/** @type {number|undefined} */
+/** @type {number} */
 virtualscroller.VirtualScrollerOptions.prototype.initialIndex;
 
 /** @type {number|undefined} */
@@ -33,3 +34,8 @@ virtualscroller.VirtualScrollerOptions.prototype.shouldReuseFn;
  * @type {(function(number): boolean)|undefined}
  */
 virtualscroller.VirtualScrollerOptions.prototype.canRenderCellAtIndexFn;
+
+/**
+ * @type {boolean|undefined}
+ */
+virtualscroller.VirtualScrollerOptions.prototype.constantSize;
