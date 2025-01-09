@@ -4,38 +4,16 @@
 goog.provide('virtualscroller.VirtualScrollerOptions');
 
 /**
- * @constructor
+ * @typedef {{
+ *   initialIndex: number,
+ *   minIndex: (number|undefined),
+ *   maxIndex: (number|undefined),
+ *   renderFn: (function(): void),
+ *   reuseFn: ((function(number, Element): Element)|undefined),
+ *   shouldReuseFn: ((function(number, number): boolean)|undefined),
+ *   canRenderCellAtIndexFn: (function(number): boolean|undefined),
+ *   constantSize: (boolean|undefined)
+ * }}
  */
-virtualscroller.VirtualScrollerOptions = function() {};
+virtualscroller.VirtualScrollerOptions;
 
-/** @type {number} */
-virtualscroller.VirtualScrollerOptions.prototype.initialIndex;
-
-/** @type {number|undefined} */
-virtualscroller.VirtualScrollerOptions.prototype.minIndex;
-
-/** @type {number|undefined} */
-virtualscroller.VirtualScrollerOptions.prototype.maxIndex;
-
-/** @type {function():void|undefined} */
-virtualscroller.VirtualScrollerOptions.prototype.renderFn;
-
-/**
- * @type {(function(number, Element): Element)|undefined}
- */
-virtualscroller.VirtualScrollerOptions.prototype.reuseFn;
-
-/**
- * @type {(function(number, number): boolean)|undefined}
- */
-virtualscroller.VirtualScrollerOptions.prototype.shouldReuseFn;
-
-/**
- * @type {(function(number): boolean)|undefined}
- */
-virtualscroller.VirtualScrollerOptions.prototype.canRenderCellAtIndexFn;
-
-/**
- * @type {boolean|undefined}
- */
-virtualscroller.VirtualScrollerOptions.prototype.constantSize;

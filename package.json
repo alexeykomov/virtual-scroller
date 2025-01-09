@@ -6,13 +6,14 @@
   "scripts": {
     "test": "echo \"Error: no test specified\" && exit 1",
     "build": "google-closure-compiler --js=src/third_party/closure-library/closure/goog/*.js --js=src/third_party/closure-library/closure/goog/**/*.js --js=src/virtual-scroller/**/*.js --js=src/virtual-scroller/*.js --entry_point=src/virtual-scroller/VirtualScroller.js --warning_level=VERBOSE --js_output_file=dist/VirtualScroller.min.js --define='COMPILED=true' --charset=utf-8 --compilation_level=ADVANCED_OPTIMIZATIONS --summary_detail_level=3 --language_out=ECMASCRIPT5",
+    "calcdeps": "python third_party/closure-library/closure/bin/build/depswriter.py \\\n  --root_with_prefix=\"third_party/closure-library/closure/goog ../../../../third_party/closure-library/closure/goog\" \\\n  --root_with_prefix=\"virtual-scroller ../../../../virtual-scroller\" \\\n  --output_file=src/deps.js",
     "compress:gzip": "node scripts/compress.js gzip",
     "compress:brotli": "node scripts/compress.js brotli",
     "compress:zopfli": "node scripts/compress.js zopfli",
     "compress": "npm run compress:gzip && npm run compress:brotli && npm run compress:zopfli",
     "build:all": "npm run build && npm run compress"
   },
-  "author": "",
+  "author": "alexeykomov",
   "license": "MIT",
   "devDependencies": {
     "google-closure-compiler": "^20240317.0.0",

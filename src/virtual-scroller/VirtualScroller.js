@@ -48,7 +48,7 @@ virtualscroller.VirtualScroller = class extends goog.ui.Component {
     this.initialIndex_ = opt_options.initialIndex;
     this.minIndex_ = opt_options.minIndex;
     this.maxIndex_ = opt_options.maxIndex;
-    this.renderFn_ = opt_options.renderFn || goog.abstractMethod;
+    this.renderFn_ = opt_options.renderFn;
     /** @type {(function(number, Element):Element) | undefined} A function that returns whether cell from prevUsedCellIndex should be reused for cell at currentCellIndex. */
     this.reuseFn_ = opt_options.reuseFn;
     /**
@@ -99,6 +99,7 @@ virtualscroller.VirtualScroller = class extends goog.ui.Component {
     super.decorateInternal(element);
     const elem = this.getElement();
     const contentElem = this.dom_.getFirstElementChild(elem);
+    this.contentElem_ = contentElem;
     goog.asserts.assert(
       this.contentElem_,
       'Content element must be present inside the frame element.'

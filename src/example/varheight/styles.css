@@ -1,0 +1,18 @@
+body {
+    font-family: Arial, sans-serif;
+    margin: 0;
+    padding: 0;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    height: 100vh;
+    background-color: #f0f0f0;
+}
+
+#scroller-container {
+    width: 300px;
+    height: 500px;
+    overflow-y: auto;
+    border: 1px solid #ccc;
+    background-color: #fff;
+}
