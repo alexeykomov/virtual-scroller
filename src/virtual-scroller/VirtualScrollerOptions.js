@@ -6,6 +6,8 @@ goog.provide('virtualscroller.VirtualScrollerOptions');
 /**
  * @typedef {{
  *   initialIndex: number,
+ *   height: number,
+ *   width: number,
  *   minIndex: (number|undefined),
  *   maxIndex: (number|undefined),
  *   renderFn: (function(): void),
