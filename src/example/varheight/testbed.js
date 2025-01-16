@@ -17,19 +17,23 @@ const reuseCell = (prevIndex, currentIndex) => {
 // Virtual Scroller options
 const options = {
   initialIndex: 0,
+  height: 0,
+  width: 0,
   minIndex: 0,
   maxIndex: 1000,
   renderFn: renderCell,
   reuseFn: reuseCell,
   shouldReuseFn: (prevIndex, currentIndex) => true,
   canRenderCellAtIndexFn: (index) => true,
-  constantSize: true,
+  constantSize: false,
 };
 
 // Initialize the Virtual Scroller
 document.addEventListener('DOMContentLoaded', () => {
   const container = document.getElementById('scroller-container');
   const domHelper = new goog.dom.DomHelper(document);
+  options.height = container.getBoundingClientRect().height - 2;
+  options.width = container.getBoundingClientRect().width - 2;
 
   const scroller = new virtualscroller.VirtualScroller(domHelper, options);
   scroller.render(container);
