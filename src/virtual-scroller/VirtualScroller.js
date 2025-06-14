@@ -142,14 +142,27 @@ virtualscroller.VirtualScroller = class extends goog.ui.Component {
 
     let index = this.initialIndex_;
 
-    while (accumulatedHeight < frameHeight && this.canRender_(index)) {
+    let batchSize = 10;
+    let canRender = true;
+    while (accumulatedHeight < frameHeight) {
+      const endIndex = this.initialIndex_ + batchSize
+      const indexes = []
+
+      for (let i = this.initialIndex_; i < this.initialIndex_ + batchSize; i++) {
+        if (!this.canRender_(i)) {
+          canRender = false;
+          break
+        }
+        indexes.push(i)
+      }
+
       const cellDom = /** @type {Element} */ (this.getCellDom());
       const cellModel = new virtualscroller.CellModel(this.initialIndex_ + index, 0, 0);
       cellDom.id = cellModel.elementId;
 
       this.cellsModel_.addBack(cellModel);
       this.dom_.appendChild(content, cellDom);
-      const cellHeight = this.fillCellWithContent(index, this.renderFn_, cellDom);
+      const cellHeight = this.createBatchOfCells(indexes, this.renderFn_, cellDom);
       cellModel.height = cellHeight;
       cellModel.top = accumulatedHeight;
       cellDom.style.height = `${cellModel.height}px`;
@@ -157,6 +170,7 @@ virtualscroller.VirtualScroller = class extends goog.ui.Component {
 
       accumulatedHeight += cellHeight;
       index++;
+      batchSize *= 2;
     }
     accumulatedHeight = this.addBufferCells_(accumulatedHeight, frame, content, index);
     this.contentHeight_ = Math.max(frameHeight, accumulatedHeight);
@@ -165,7 +179,7 @@ virtualscroller.VirtualScroller = class extends goog.ui.Component {
     this.getElement().scrollTop = closestNonSentinel ? closestNonSentinel.top : 0;
   }
 
-  addBufferCells_(accumulatedHeight, frame, content, index) {
+  async addBufferCells_(accumulatedHeight, frame, content, index) {
     let bufferCellIndex = 0;
     while (
       this.canRender_(this.initialIndex_ - bufferCellIndex - 1) &&
@@ -252,27 +266,47 @@ virtualscroller.VirtualScroller = class extends goog.ui.Component {
   }
 
   /**
-   * Fills the given cell element with content rendered into a fragment and sets its height based on measured content.
-   * @param {number} index The index of the cell to fill.
+   * Fills multiple cell elements with content rendered into a single fragment and sets their heights based on measured content.
+   * All cell measurements are batched in a single requestAnimationFrame for efficiency.
+   * @param {!Array<number>} indices The indices of the cells to fill.
    * @param {function(number, DocumentFragment):void | null} renderFn A function that renders content into the given DocumentFragment.
-   * @param {Element} cellElem The DOM element representing the cell to be filled with content.
-   * @return {number} client height of cell
+   * @return {!Promise<{clientHeight: number, cellElems: !Array<!Element>, cellModels: !Array<!virtualscroller.CellModel>}>} Promise resolving to an object containing the cumulative client height and an array of cell elements.
    */
-  fillCellWithContent(index, renderFn, cellElem) {
+  async createBatchOfCells(indices, renderFn) {
     'use strict';
     goog.asserts.assert(this.probe_ !== null, 'Probe must be a Node.');
+    goog.asserts.assert(indices.length > 0, 'Number of indices must be positive.');
     const fragment = this.dom_.getDocument().createDocumentFragment();
     // Renders cell content into fragment
-    renderFn(index, fragment);
+    const cellElems = [];
+    const cellModels = [];
+    for (let i = 0; i < indices.length; i++) {
+      const cellDom = /** @type {Element} */ (this.getCellDom());
+      const cellModel = new virtualscroller.CellModel(indices[i], 0, 0);
+      cellDom.id = cellModel.elementId;
+
+      this.cellsModel_.addBack(cellModel);
+      cellElems.push(cellDom);
+      cellModels.push(cellModel);
+
+      const index = indices[i];
+      renderFn(index, cellDom);
+      this.dom_.append(fragment, cellDom);
+    }
+
     this.dom_.removeChildren(this.probe_);
     this.dom_.append(/** @type {!Node} */ (this.probe_), fragment);
-    const clientHeight = this.probe_.clientHeight;
-    cellElem.style.height = `${clientHeight}px`;
 
-    while (this.probe_.firstChild) {
-      cellElem.appendChild(this.probe_.firstChild);
-    }
-    return clientHeight;
+    const clientHeight = await new Promise(resolve => {
+      requestAnimationFrame(() => {
+        const heights = cellElems.map(c => c.clientHeight).reduce((a, b) => a + b);
+        resolve(heights);
+      });
+    });
+
+
+
+    return {clientHeight, cellElems, cellModels};
   }
 
   enterDocument() {
