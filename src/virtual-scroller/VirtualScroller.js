@@ -145,6 +145,7 @@ virtualscroller.VirtualScroller = class extends goog.ui.Component {
     probe.style.left = '-9999px';
     probe.style.opacity = '0';
     probe.style.width = '100%';
+    probe.id = 'virtual-scroller-probe';
     this.probe_ = probe;
     this.dom_.append(contentElem, probe);
 
@@ -191,7 +192,7 @@ virtualscroller.VirtualScroller = class extends goog.ui.Component {
       console.log('res: ', res);
 
       cellHeight = res.clientHeight;
-      accumulatedHeight += cellHeight;
+      accumulatedHeight = cellHeight;
       index++;
       batchSize *= 2;
       cellElems = res.cellElems;
@@ -207,7 +208,7 @@ virtualscroller.VirtualScroller = class extends goog.ui.Component {
 
     //accumulatedHeight = this.addBufferCells_(accumulatedHeight, frame, content, index);
     this.contentHeight_ = Math.max(frameHeight, accumulatedHeight);
-    this.contentElem_.style.height = this.contentHeight_;
+    this.contentElem_.style.height = `${this.contentHeight_}px`;
     //const closestNonSentinel = this.getClosestSentinel(true, false);
     //this.getElement().scrollTop = closestNonSentinel ? closestNonSentinel.top : 0;
   }
@@ -340,7 +341,6 @@ virtualscroller.VirtualScroller = class extends goog.ui.Component {
           model.height = height;
           model.top = totalHeight;
 
-
           cellElem.style.height = `${height}px`;
           cellElem.style.top = `${totalHeight}px`;
           cellElem.style.position = 'absolute';
@@ -357,24 +357,26 @@ virtualscroller.VirtualScroller = class extends goog.ui.Component {
   enterDocument() {
     'use strict';
     super.enterDocument();
-    /*this.getHandler().listen(
+    this.getHandler().listen(
       this.getElement(),
       goog.events.EventType.SCROLL,
       this.onContentScrolled_
-    );*/
+    );
   }
 
   onContentScrolled_(e) {
     'use strict';
     this.contentPosition_ = this.getElement().scrollTop;
-    if (this.prevPosition_ < this.contentPosition_) {
-      this.direction_ =
-        this.prevPosition_ < this.contentPosition_
-          ? virtualscroller.Direction.UP
-          : virtualscroller.Direction.DOWN;
-    }
+    console.log('this.contentPosition_: ', this.contentPosition_);
+    console.log('this.contentHeight_: ', this.contentHeight_);
+    console.log('this.prevPosition_: ', this.prevPosition_);
 
-    const speed = this.calculateSpeed_(this.contentPosition_, this.prevPosition_);
+    this.direction_ =
+      this.prevPosition_ > this.contentPosition_
+        ? virtualscroller.Direction.UP
+        : virtualscroller.Direction.DOWN;
+
+    /*const speed = this.calculateSpeed_(this.contentPosition_, this.prevPosition_);
 
     if (this.direction_ === virtualscroller.Direction.UP) {
       const sentinel = this.getClosestSentinel(false);
@@ -390,7 +392,8 @@ virtualscroller.VirtualScroller = class extends goog.ui.Component {
       ) {
         this.placeCells_(this.direction_, speed);
       }
-    }
+    }*/
+    this.prevPosition_ = this.contentPosition_;
   }
 
   /**
