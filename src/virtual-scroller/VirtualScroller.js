@@ -15,6 +15,15 @@ virtualscroller.VirtualScroller.OFFSET = 100;
 virtualscroller.VirtualScroller.INITIAL_SENTINEL_NUM = 2;
 
 /**
+ * @typedef {{
+ *   clientHeight: number,
+ *   cellElems: !Array<!Element>,
+ *   cellModels: !Array<!virtualscroller.CellModel>
+ * }}
+ */
+virtualscroller.CellBatch;
+
+/**
  * Virtual Scroller class for efficiently handling large lists of items.
  * @class
  */
@@ -48,6 +57,7 @@ virtualscroller.VirtualScroller = class extends goog.ui.Component {
     this.initialIndex_ = opt_options.initialIndex;
     this.minIndex_ = opt_options.minIndex;
     this.maxIndex_ = opt_options.maxIndex;
+    /** @type {(function(number, DocumentFragment):void)} A function that renders cell content into provided cell. */
     this.renderFn_ = opt_options.renderFn;
     /** @type {(function(number, Element):Element) | undefined} A function that returns whether cell from prevUsedCellIndex should be reused for cell at currentCellIndex. */
     this.reuseFn_ = opt_options.reuseFn;
@@ -131,7 +141,7 @@ virtualscroller.VirtualScroller = class extends goog.ui.Component {
   /**
    * Renders cells within the virtual scroller frame.
    */
-  renderCells() {
+  async renderCells() {
     'use strict';
 
     const frame = this.getElement();
@@ -144,8 +154,10 @@ virtualscroller.VirtualScroller = class extends goog.ui.Component {
 
     let batchSize = 10;
     let canRender = true;
-    while (accumulatedHeight < frameHeight) {
-      const endIndex = this.initialIndex_ + batchSize
+    let cellHeight;
+    let cellElems;
+    let cellModels;
+    while (accumulatedHeight < frameHeight || !canRender) {
       const indexes = []
 
       for (let i = this.initialIndex_; i < this.initialIndex_ + batchSize; i++) {
@@ -156,30 +168,31 @@ virtualscroller.VirtualScroller = class extends goog.ui.Component {
         indexes.push(i)
       }
 
-      const cellDom = /** @type {Element} */ (this.getCellDom());
-      const cellModel = new virtualscroller.CellModel(this.initialIndex_ + index, 0, 0);
-      cellDom.id = cellModel.elementId;
+      const res = /** @type {virtualscroller.CellBatch}*/await this.createBatchOfCells(indexes, this.renderFn_);
 
-      this.cellsModel_.addBack(cellModel);
-      this.dom_.appendChild(content, cellDom);
-      const cellHeight = this.createBatchOfCells(indexes, this.renderFn_, cellDom);
-      cellModel.height = cellHeight;
-      cellModel.top = accumulatedHeight;
-      cellDom.style.height = `${cellModel.height}px`;
-      cellDom.style.top = `${cellModel.top}px`;
-
+      cellHeight = res.clientHeight;
       accumulatedHeight += cellHeight;
       index++;
       batchSize *= 2;
+      cellElems = res.cellElems;
+      cellModels = res.cellModels;
     }
-    accumulatedHeight = this.addBufferCells_(accumulatedHeight, frame, content, index);
+
+    for (const cellModel of cellModels) {
+      this.cellsModel_.addBack(cellModel);
+    }
+    for (const cellDom of cellElems) {
+      this.dom_.appendChild(content, cellDom);
+    }
+
+    //accumulatedHeight = this.addBufferCells_(accumulatedHeight, frame, content, index);
     this.contentHeight_ = Math.max(frameHeight, accumulatedHeight);
     this.contentElem_.style.height = this.contentHeight_;
-    const closestNonSentinel = this.getClosestSentinel(true, false);
-    this.getElement().scrollTop = closestNonSentinel ? closestNonSentinel.top : 0;
+    //const closestNonSentinel = this.getClosestSentinel(true, false);
+    //this.getElement().scrollTop = closestNonSentinel ? closestNonSentinel.top : 0;
   }
 
-  async addBufferCells_(accumulatedHeight, frame, content, index) {
+  /*async addBufferCells_(accumulatedHeight, frame, content, index) {
     let bufferCellIndex = 0;
     while (
       this.canRender_(this.initialIndex_ - bufferCellIndex - 1) &&
@@ -206,7 +219,7 @@ virtualscroller.VirtualScroller = class extends goog.ui.Component {
       );
     }
     return accumulatedHeight;
-  }
+  }*/
 
   canRender_(index) {
     if (this.canRenderCelAtIndexFn_) {
@@ -269,8 +282,8 @@ virtualscroller.VirtualScroller = class extends goog.ui.Component {
    * Fills multiple cell elements with content rendered into a single fragment and sets their heights based on measured content.
    * All cell measurements are batched in a single requestAnimationFrame for efficiency.
    * @param {!Array<number>} indices The indices of the cells to fill.
-   * @param {function(number, DocumentFragment):void | null} renderFn A function that renders content into the given DocumentFragment.
-   * @return {!Promise<{clientHeight: number, cellElems: !Array<!Element>, cellModels: !Array<!virtualscroller.CellModel>}>} Promise resolving to an object containing the cumulative client height and an array of cell elements.
+   * @param {function(number, DocumentFragment):void} renderFn A function that renders content into the given DocumentFragment.
+   * @return {!Promise<virtualscroller.CellBatch>} Promise resolving to an object containing the cumulative client height and an array of cell elements.
    */
   async createBatchOfCells(indices, renderFn) {
     'use strict';
@@ -304,19 +317,17 @@ virtualscroller.VirtualScroller = class extends goog.ui.Component {
       });
     });
 
-
-
     return {clientHeight, cellElems, cellModels};
   }
 
   enterDocument() {
     'use strict';
     super.enterDocument();
-    this.getHandler().listen(
+    /*this.getHandler().listen(
       this.getElement(),
       goog.events.EventType.SCROLL,
       this.onContentScrolled_
-    );
+    );*/
   }
 
   onContentScrolled_(e) {

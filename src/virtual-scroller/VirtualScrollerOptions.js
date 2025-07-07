@@ -10,7 +10,7 @@ goog.provide('virtualscroller.VirtualScrollerOptions');
  *   width: number,
  *   minIndex: (number|undefined),
  *   maxIndex: (number|undefined),
- *   renderFn: (function(): void),
+ *   renderFn: (function(number, DocumentFragment): void),
  *   reuseFn: ((function(number, Element): Element)|undefined),
  *   shouldReuseFn: ((function(number, number): boolean)|undefined),
  *   canRenderCellAtIndexFn: (function(number): boolean|undefined),
