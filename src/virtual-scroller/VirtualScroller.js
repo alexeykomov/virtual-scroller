@@ -298,7 +298,9 @@ virtualscroller.VirtualScroller = class extends goog.ui.Component {
   }
 
   /**
-   * Creates a batch of cells, renders them, and updates their models with real heights.
+   * Creates a batch of cells, renders them, and updates their models with real heights and top positions.
+   * Also updates each cell DOM element with corresponding style.
+   *
    * @param {!Array<number>} indices The data indices for the cells to create.
    * @param {function(number, Element):void} renderFn Function to render each cell into a DOM element.
    * @return {!Promise<{clientHeight: number, cellElems: !Array<Element>, cellModels: !Array<!virtualscroller.CellModel>}>}
@@ -317,7 +319,6 @@ virtualscroller.VirtualScroller = class extends goog.ui.Component {
       const cellModel = new virtualscroller.CellModel(indices[i], 0, 0);
       cellDom.id = cellModel.elementId;
 
-      this.cellsModel_.addBack(cellModel);
       cellElems.push(cellDom);
       cellModels.push(cellModel);
 
@@ -332,8 +333,18 @@ virtualscroller.VirtualScroller = class extends goog.ui.Component {
       requestAnimationFrame(() => {
         let totalHeight = 0;
         for (let i = 0; i < cellElems.length; i++) {
-          const height = cellElems[i].clientHeight;
-          cellModels[i].height = height;
+          const cellElem = cellElems[i];
+          const height = cellElem.clientHeight;
+          const model = cellModels[i];
+
+          model.height = height;
+          model.top = totalHeight;
+
+
+          cellElem.style.height = `${height}px`;
+          cellElem.style.top = `${totalHeight}px`;
+          cellElem.style.position = 'absolute';
+
           totalHeight += height;
         }
         resolve(totalHeight);
