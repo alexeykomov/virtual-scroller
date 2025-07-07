@@ -1,18 +1,30 @@
-// Sample render function
-const renderCell = (index, fragment) => {
+// Sample render function with variable height
+const renderCell = (index, cellFrame) => {
   const div = document.createElement('div');
-  div.textContent = `Item ${index}`;
+  const text = 'Item ' + index + ': ' + generateRandomText();
+  div.textContent = text;
   div.style.padding = '10px';
   div.style.borderBottom = '1px solid #ddd';
-  div.style.height = '50px';
-  fragment.appendChild(div);
+  div.style.lineHeight = '1.4';
+  div.style.boxSizing = 'border-box';
+  cellFrame.appendChild(div);
 };
 
+// Helper to generate variable-length placeholder text
+function generateRandomText() {
+  const words = [
+    'lorem', 'ipsum', 'dolor', 'sit', 'amet', 'consectetur', 'adipiscing', 'elit',
+    'sed', 'do', 'eiusmod', 'tempor', 'incididunt', 'ut', 'labore', 'et', 'dolore',
+    'magna', 'aliqua', 'enim', 'ad', 'minim', 'veniam'
+  ];
+  const wordCount = 5 + Math.floor(Math.random() * 50);
+  return Array.from({ length: wordCount }, () => words[Math.floor(Math.random() * words.length)]).join(' ');
+}
+
 // Sample reuse function
-const reuseCell = (prevIndex, currentIndex) => {
-  console.log(`Reusing cell from index ${prevIndex} to ${currentIndex}`);
-  return true;
-};
+const reuseCell = (element) => {
+  return element
+}
 
 // Virtual Scroller options
 const options = {
@@ -26,6 +38,7 @@ const options = {
   shouldReuseFn: (prevIndex, currentIndex) => true,
   canRenderCellAtIndexFn: (index) => true,
   constantSize: false,
+  batchSize: 2
 };
 
 // Initialize the Virtual Scroller

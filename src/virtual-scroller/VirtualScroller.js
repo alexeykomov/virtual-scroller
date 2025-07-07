@@ -13,6 +13,7 @@ goog.require('virtualscroller.CellModel');
 
 virtualscroller.VirtualScroller.OFFSET = 100;
 virtualscroller.VirtualScroller.INITIAL_SENTINEL_NUM = 2;
+virtualscroller.VirtualScroller.BATCH_SIZE = 10;
 
 /**
  * @typedef {{
@@ -45,6 +46,11 @@ virtualscroller.VirtualScroller = class extends goog.ui.Component {
       typeof opt_options.initialIndex === 'number',
       'initialIndex is required and must be a number.'
     );
+    goog.asserts.assert(
+        typeof opt_options.height === 'number' && opt_options.height > 0 &&
+        typeof opt_options.width === 'number' && opt_options.width > 0,
+        'Both height and width must be provided and greater than 0.'
+    );
     const hasMinMaxIndex =
       typeof opt_options.minIndex === 'number' && typeof opt_options.maxIndex === 'number';
     const hasCanRenderCellFn = typeof opt_options.canRenderCellAtIndexFn === 'function';
@@ -57,7 +63,7 @@ virtualscroller.VirtualScroller = class extends goog.ui.Component {
     this.initialIndex_ = opt_options.initialIndex;
     this.minIndex_ = opt_options.minIndex;
     this.maxIndex_ = opt_options.maxIndex;
-    /** @type {(function(number, DocumentFragment):void)} A function that renders cell content into provided cell. */
+    /** @type {(function(number, Element):void)} A function that renders cell content into provided cell. */
     this.renderFn_ = opt_options.renderFn;
     /** @type {(function(number, Element):Element) | undefined} A function that returns whether cell from prevUsedCellIndex should be reused for cell at currentCellIndex. */
     this.reuseFn_ = opt_options.reuseFn;
@@ -82,6 +88,12 @@ virtualscroller.VirtualScroller = class extends goog.ui.Component {
     this.contentHeight_ = 0;
     /** @private @type {number} */
     this.prevPosition_ = 0;
+    /** @private @type {number} */
+    this.frameHeight_ = opt_options.height;
+    /** @private @type {number} */
+    this.frameWidth_ = opt_options.width;
+    /** @private @type {number} */
+    this.batchSize_ = opt_options.batchSize || virtualscroller.VirtualScroller.BATCH_SIZE;
     /** @private @type {virtualscroller.Direction} */
     this.direction_ = virtualscroller.Direction.UP;
     /**
@@ -119,6 +131,8 @@ virtualscroller.VirtualScroller = class extends goog.ui.Component {
     goog.dom.classlist.add(contentElem, goog.getCssName('virtual-scroller-content'));
     elem.style.overflowY = 'auto';
     elem.tabIndex = 0;
+    elem.style.height = `${this.frameHeight_}px`
+    elem.style.width = `${this.frameWidth_}px`
 
     contentElem.style.position = 'relative';
     contentElem.style.top = '0';
@@ -147,16 +161,21 @@ virtualscroller.VirtualScroller = class extends goog.ui.Component {
     const frame = this.getElement();
     const content = this.contentElem_;
 
-    const frameHeight = frame.clientHeight;
+    console.log('frame: ', frame);
+    const frameHeight = this.frameHeight_;
+
     let accumulatedHeight = 0;
 
     let index = this.initialIndex_;
 
-    let batchSize = 10;
+    let batchSize = this.batchSize_;
     let canRender = true;
     let cellHeight;
-    let cellElems;
-    let cellModels;
+    /** @type {!Array<!Element>} */
+    let cellElems = [];
+    /** @type {!Array<!virtualscroller.CellModel>} */
+    let cellModels = [];
+    console.log('frameHeight: ', frameHeight);
     while (accumulatedHeight < frameHeight || !canRender) {
       const indexes = []
 
@@ -168,7 +187,8 @@ virtualscroller.VirtualScroller = class extends goog.ui.Component {
         indexes.push(i)
       }
 
-      const res = /** @type {virtualscroller.CellBatch}*/await this.createBatchOfCells(indexes, this.renderFn_);
+      const res = /** @type {virtualscroller.CellBatch}*/ (await this.createBatchOfCells(indexes, this.renderFn_));
+      console.log('res: ', res);
 
       cellHeight = res.clientHeight;
       accumulatedHeight += cellHeight;
@@ -267,7 +287,6 @@ virtualscroller.VirtualScroller = class extends goog.ui.Component {
 
   /**
    * Creates and returns a new cell DOM element.
-   * The implementation of this method should be provided later.
    * @return {Element} A DOM element representing a cell.
    */
   getCellDom() {
@@ -279,20 +298,20 @@ virtualscroller.VirtualScroller = class extends goog.ui.Component {
   }
 
   /**
-   * Fills multiple cell elements with content rendered into a single fragment and sets their heights based on measured content.
-   * All cell measurements are batched in a single requestAnimationFrame for efficiency.
-   * @param {!Array<number>} indices The indices of the cells to fill.
-   * @param {function(number, DocumentFragment):void} renderFn A function that renders content into the given DocumentFragment.
-   * @return {!Promise<virtualscroller.CellBatch>} Promise resolving to an object containing the cumulative client height and an array of cell elements.
+   * Creates a batch of cells, renders them, and updates their models with real heights.
+   * @param {!Array<number>} indices The data indices for the cells to create.
+   * @param {function(number, Element):void} renderFn Function to render each cell into a DOM element.
+   * @return {!Promise<{clientHeight: number, cellElems: !Array<Element>, cellModels: !Array<!virtualscroller.CellModel>}>}
    */
   async createBatchOfCells(indices, renderFn) {
     'use strict';
     goog.asserts.assert(this.probe_ !== null, 'Probe must be a Node.');
     goog.asserts.assert(indices.length > 0, 'Number of indices must be positive.');
+
     const fragment = this.dom_.getDocument().createDocumentFragment();
-    // Renders cell content into fragment
     const cellElems = [];
     const cellModels = [];
+
     for (let i = 0; i < indices.length; i++) {
       const cellDom = /** @type {Element} */ (this.getCellDom());
       const cellModel = new virtualscroller.CellModel(indices[i], 0, 0);
@@ -302,8 +321,7 @@ virtualscroller.VirtualScroller = class extends goog.ui.Component {
       cellElems.push(cellDom);
       cellModels.push(cellModel);
 
-      const index = indices[i];
-      renderFn(index, cellDom);
+      renderFn(indices[i], cellDom);
       this.dom_.append(fragment, cellDom);
     }
 
@@ -312,12 +330,17 @@ virtualscroller.VirtualScroller = class extends goog.ui.Component {
 
     const clientHeight = await new Promise(resolve => {
       requestAnimationFrame(() => {
-        const heights = cellElems.map(c => c.clientHeight).reduce((a, b) => a + b);
-        resolve(heights);
+        let totalHeight = 0;
+        for (let i = 0; i < cellElems.length; i++) {
+          const height = cellElems[i].clientHeight;
+          cellModels[i].height = height;
+          totalHeight += height;
+        }
+        resolve(totalHeight);
       });
     });
 
-    return {clientHeight, cellElems, cellModels};
+    return { clientHeight, cellElems, cellModels };
   }
 
   enterDocument() {
