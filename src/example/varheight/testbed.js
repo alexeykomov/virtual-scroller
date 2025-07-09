@@ -37,9 +37,9 @@ const options = {
   reuseFn: reuseCell,
   shouldReuseFn: (prevIndex, currentIndex) => true,
   canRenderCellAtIndexFn: (index) => true,
-  constantSize: false,
+  estimatedCellHeight: 30,
   batchSize: 2,
-  bufferSize: 2
+  bufferSize: 1
 };
 
 // Initialize the Virtual Scroller

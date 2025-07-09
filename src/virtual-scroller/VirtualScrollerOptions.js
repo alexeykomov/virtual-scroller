@@ -14,7 +14,8 @@ goog.provide('virtualscroller.VirtualScrollerOptions');
  *   reuseFn: ((function(number, Element): Element)|undefined),
  *   shouldReuseFn: ((function(number, number): boolean)|undefined),
  *   canRenderCellAtIndexFn: (function(number): boolean|undefined),
- *   constantSize: (boolean|undefined),
+ *   cellHeight: (number|undefined),
+ *   estimatedCellHeight: (number|undefined),
  *   batchSize: (number|undefined),
  *   bufferSize: (number|undefined)
  * }}
