@@ -65,14 +65,15 @@ virtualscroller.VirtualScroller = class extends goog.ui.Component {
       'Either minIndex and maxIndex must be provided, or canRenderCellAtIndexFn must be defined.'
     );
     const hasCellHeight = typeof opt_options.cellHeight === 'number' && opt_options.cellHeight > 0;
-    const hasEstimatedCellHeight = typeof opt_options.estimatedCellHeight === 'number' && opt_options.estimatedCellHeight > 0;
+    const hasEstimatedCellHeight =
+      typeof opt_options.estimatedCellHeight === 'number' && opt_options.estimatedCellHeight > 0;
     goog.asserts.assert(
-        hasCellHeight || hasEstimatedCellHeight,
-        'Either cellHeight or estimatedCellHeight must be provided.'
+      hasCellHeight || hasEstimatedCellHeight,
+      'Either cellHeight or estimatedCellHeight must be provided.'
     );
     goog.asserts.assert(
-        !(hasCellHeight && hasEstimatedCellHeight),
-        'Only one of cellHeight or estimatedCellHeight should be provided, not both.'
+      !(hasCellHeight && hasEstimatedCellHeight),
+      'Only one of cellHeight or estimatedCellHeight should be provided, not both.'
     );
 
     /** @type {number} Index of data item which will be at top position in content. */
@@ -119,6 +120,8 @@ virtualscroller.VirtualScroller = class extends goog.ui.Component {
     this.cellHeight_ = opt_options.cellHeight;
     /** @private @type {virtualscroller.Direction} */
     this.direction_ = virtualscroller.Direction.UP;
+    /** @type {!Set<HTMLElement>} */
+    this.reusableCellElemsPool_ = new Set();
     /** @private @type {boolean} */
     this.initialLayoutComplete_ = false;
     /**
@@ -146,6 +149,7 @@ virtualscroller.VirtualScroller = class extends goog.ui.Component {
     super.decorateInternal(element);
     const elem = this.getElement();
     const contentElem = this.dom_.getFirstElementChild(elem);
+    this.frameElem_ = elem;
     this.contentElem_ = contentElem;
     goog.asserts.assert(
       this.contentElem_,
@@ -395,7 +399,7 @@ virtualscroller.VirtualScroller = class extends goog.ui.Component {
           elem.style.height = `${height}px`;
           elem.style.top = `${model.top}px`;
           elem.style.position = 'absolute';
-          goog.dom.dataset.set(elem, 'index', model.dataIndex);
+          goog.dom.dataset.set(elem, 'index', String(model.dataIndex));
           if (markSentinels) {
             goog.dom.classlist.add(elem, goog.getCssName('virtual-scroller-sentinel'));
             goog.dom.dataset.set(elem, 'sentinel', 'true');
@@ -421,7 +425,7 @@ virtualscroller.VirtualScroller = class extends goog.ui.Component {
     );
   }
 
-  onContentScrolled_(e) {
+  async onContentScrolled_(e) {
     'use strict';
     this.contentPosition_ = this.getElement().scrollTop;
     console.log('this.contentPosition_: ', this.contentPosition_);
@@ -433,16 +437,16 @@ virtualscroller.VirtualScroller = class extends goog.ui.Component {
         ? virtualscroller.Direction.UP
         : virtualscroller.Direction.DOWN;
 
-    /*const speed = this.calculateSpeed_(this.contentPosition_, this.prevPosition_);
+    const speed = this.calculateSpeed_(this.contentPosition_, this.prevPosition_);
 
     if (this.direction_ === virtualscroller.Direction.UP) {
-      const sentinel = this.getClosestSentinel(false);
+      const sentinel = this.getClosestSentinel(virtualscroller.Direction.UP);
       if (sentinel && sentinel.top + sentinel.height >= this.contentPosition_) {
         this.placeCells_(this.direction_, speed);
       }
     }
-    if (this.direction_ === virtualscroller.Direction.DOWN) {
-      const sentinel = this.getClosestSentinel(true);
+    /*if (this.direction_ === virtualscroller.Direction.DOWN) {
+      const sentinel = this.getClosestSentinel(virtualscroller.Direction.DOWN);
       if (
         sentinel &&
         sentinel.top + sentinel.height <= this.contentPosition_ + this.frameElem_.height
@@ -455,19 +459,17 @@ virtualscroller.VirtualScroller = class extends goog.ui.Component {
 
   /**
    * Finds the closest item in the deque that matches the specified condition.
-   * If `searchFromTop` is true, searches from the front; otherwise, searches from the back.
    * Can search for either sentinel or non-sentinel nodes based on the `findSentinel` parameter.
    *
-   * @param {boolean} searchFromTop If true, searches from the front; if false, searches from the back.
+   * @param {virtualscroller.Direction} searchFor Which sentinel to search for.
    * @param {boolean=} findSentinel If true (default), searches for sentinel nodes; if false, searches for non-sentinel nodes.
    * @return {virtualscroller.CellModel|undefined} The closest matching item, or undefined if none exists.
    */
-  getClosestSentinel(searchFromTop, findSentinel = true) {
+  getClosestSentinel(searchFor, findSentinel = true) {
     let result = undefined;
-
     const condition = (item) => (findSentinel ? item.sentinel : !item.sentinel);
 
-    if (searchFromTop) {
+    if (searchFor === virtualscroller.Direction.DOWN) {
       this.cellsModel_.forEach((item) => {
         if (condition(item)) {
           result = item;
@@ -504,10 +506,9 @@ virtualscroller.VirtualScroller = class extends goog.ui.Component {
    * @param {number} speed The speed with which user scrolls
    * TODO: speed may affect how many cells are removed/created in batch
    */
-  placeCells_(direction, speed) {
+  async placeCells_(direction, speed) {
     'use strict';
-    const frame = this.getElement(); // Frame element (main scroller)
-    const frameHeight = frame.clientHeight;
+    const frameHeight = this.frameHeight_;
 
     let cellToRemove;
     let prevUsedCellIndex;
@@ -515,21 +516,22 @@ virtualscroller.VirtualScroller = class extends goog.ui.Component {
     let modelOfCellToRemove;
     let cellHeight = 0;
     if (direction === virtualscroller.Direction.UP) {
-      cellToRemove = this.dom_.getLastElementChild(this.contentElem_);
-      prevUsedCellIndex = this.cellsModel_.peekBack().dataIndex;
-      const peekFront = this.cellsModel_.peekFront();
+      const peekBack = /** @type {virtualscroller.CellModel} */ (this.cellsModel_.peekBack());
+      const cellToRemoveElementId = peekBack.elementId;
+      cellToRemove = this.dom_.getElement(cellToRemoveElementId);
+      prevUsedCellIndex = peekBack.dataIndex;
+      const peekFront = /** @type {virtualscroller.CellModel} */ (this.cellsModel_.peekFront());
       currentCellIndex = peekFront.dataIndex - 1;
-      cellHeight = this.fillCellWithContentOptimized(
-        prevUsedCellIndex,
-        currentCellIndex,
-        cellToRemove
+      const { clientHeight, cellModels, cellElems } = await this.createBatchOfCells_(
+        [currentCellIndex],
+        false,
+        true,
+        peekFront.top
       );
-      modelOfCellToRemove = this.cellsModel_.removeBack();
-      modelOfCellToRemove.top = peekFront.top - cellHeight;
-      modelOfCellToRemove.height = cellHeight;
-      modelOfCellToRemove.dataIndex = currentCellIndex;
-      this.cellsModel_.addFront(modelOfCellToRemove);
-      this.dom_.insertChildAt(this.contentElem_, cellToRemove, 0);
+      this.dom_.removeNode(cellToRemove);
+      this.cellsModel_.addFront(cellModels.pop());
+      this.dom_.insertChildAt(this.contentElem_, cellElems.pop(), 0);
+      cellHeight = clientHeight;
     } else {
       cellToRemove = this.dom_.getFirstElementChild(this.contentElem_);
       prevUsedCellIndex = this.cellsModel_.peekFront().dataIndex;
@@ -548,20 +550,17 @@ virtualscroller.VirtualScroller = class extends goog.ui.Component {
       this.dom_.appendChild(this.contentElem_, cellToRemove);
     }
 
-    modelOfCellToRemove.height = cellHeight;
-    cellToRemove.style.height = `${cellHeight}px`;
-
-    if (cellHeight + frameHeight > this.contentHeight_) {
+    if (cellHeight + this.contentHeight_ > this.contentHeight_) {
       const contentHeight = this.contentHeight_ + cellHeight;
-      this.contentElem_.style.height = contentHeight;
+      this.contentElem_.style.height = `${contentHeight}px`;
       this.contentHeight_ = contentHeight;
 
       if (direction === virtualscroller.Direction.UP) {
-        this.frameElem_.scrollTop += cellHeight;
+        this.getElement().scrollTop += cellHeight;
+        console.log('scroll top adjusted: ', this.getElement().scrollTop);
         this.cellsModel_.forEach((cell) => {
           cell.top += cellHeight;
-          this.getDomHelper().getDocument().getElementById(cell.elementId).style.top =
-            `${cell.top}px`;
+          this.getDomHelper().getElement(cell.elementId).style.top = `${cell.top}px`;
         });
       }
     }
